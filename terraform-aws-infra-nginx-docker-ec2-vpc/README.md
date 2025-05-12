@@ -332,6 +332,3 @@ This project
 is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ```
-
-Feel free to customize the configuration further and adjust any values or specifics as needed.
-```
