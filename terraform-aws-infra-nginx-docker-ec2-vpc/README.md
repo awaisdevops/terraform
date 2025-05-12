@@ -93,141 +93,185 @@ public_key_location = "/home/machine/.ssh/id_rsa.pub"  # File path to your publi
 
 ### `main.tf`
 
-```hcl
+# Define the AWS provider and region for infrastructure provisioning
 provider "aws" {
-  region = "eu-central-1"
+  region = "eu-central-1"  # Specify AWS region (e.g., EU Central 1)
 }
 
-variable vpc_cidr_block {}
-variable subnet_1_cidr_block {}
-variable avail_zone {}
-variable env_prefix {}
-variable instance_type {}
-variable ssh_key {}
-variable my_ip {}
+# Declare Terraform variables for VPC, subnet, availability zone, instance type, etc.
+variable vpc_cidr_block {}              # CIDR block for the VPC (IP range for your VPC)
+variable subnet_1_cidr_block {}         # CIDR block for subnet 1 (IP range for your subnet)
+variable avail_zone {}                  # Availability zone for deploying resources (e.g., ap-northeast-2c)
+variable env_prefix {}                  # Prefix for environment-specific naming (e.g., dev, prod)
+variable instance_type {}               # EC2 instance type (e.g., t2.micro)
+variable ssh_key {}                     # Path to your SSH public key file for EC2 access
+variable my_ip {}                       # Your public IP (used to restrict SSH access)
 
+# Data source for fetching the latest Amazon Linux AMI based on filters
 data "aws_ami" "amazon-linux-image" {
-  most_recent = true
-  owners      = ["amazon"]
+  most_recent = true  # Ensure the most recent AMI is selected
+  owners      = ["amazon"]  # Only include AMIs owned by Amazon
 
+  # Filter AMIs by name (matching Amazon Linux 2 AMI)
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]  # AMI name pattern for Amazon Linux 2
   }
 
+  # Filter AMIs by virtualization type (HVM)
   filter {
     name   = "virtualization-type"
-    values = ["hvm"]
+    values = ["hvm"]  # Ensure the AMI is HVM type (Hardware Virtual Machine)
   }
 }
 
+# Output the AMI ID for reference
 output "ami_id" {
-  value = data.aws_ami.amazon-linux-image.id
+  value = data.aws_ami.amazon-linux-image.id  # Output the selected AMI ID
 }
 
+# Create a custom VPC (Virtual Private Cloud) for the application
 resource "aws_vpc" "myapp-vpc" {
-  cidr_block = var.vpc_cidr_block
+  cidr_block = var.vpc_cidr_block  # Define the VPC CIDR block
   tags = {
-      Name = "${var.env_prefix}-vpc"
+    Name = "${var.env_prefix}-vpc"  # Tag with environment prefix for identification
   }
 }
 
+# Create a subnet within the VPC
 resource "aws_subnet" "myapp-subnet-1" {
-  vpc_id = aws_vpc.myapp-vpc.id
-  cidr_block = var.subnet_1_cidr_block
-  availability_zone = var.avail_zone
+  vpc_id = aws_vpc.myapp-vpc.id  # Associate subnet with the created VPC
+  cidr_block = var.subnet_1_cidr_block  # Define the subnet CIDR block
+  availability_zone = var.avail_zone  # Define the availability zone for the subnet
   tags = {
-      Name = "${var.env_prefix}-subnet-1"
+    Name = "${var.env_prefix}-subnet-1"  # Tag with environment prefix for identification
   }
 }
 
+# Create a security group to control access to the EC2 instances
 resource "aws_security_group" "myapp-sg" {
-  name   = "myapp-sg"
-  vpc_id = aws_vpc.myapp-vpc.id
+  name   = "myapp-sg"  # Security group name
+  vpc_id = aws_vpc.myapp-vpc.id  # Associate security group with the created VPC
 
+  # Ingress rule to allow SSH access (restricted to your IP)
   ingress {
-    from_port   = 22
+    from_port   = 22  # Allow SSH on port 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip]
+    cidr_blocks = [var.my_ip]  # Restrict access to your IP address
   }
 
+  # Ingress rule to allow HTTP access to the NGINX container (port 8080)
   ingress {
-    from_port   = 8080
+    from_port   = 8080  # Allow HTTP on port 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["0.0.0.0/0"]  # Open to the world (public access)
   }
 
+  # Egress rule to allow all outbound traffic
   egress {
     from_port       = 0
     to_port         = 0
-    protocol        = "-1"
-    cidr_blocks     = ["0.0.0.0/0"]
-    prefix_list_ids = []
+    protocol        = "-1"  # Allow all protocols
+    cidr_blocks     = ["0.0.0.0/0"]  # Allow all outbound traffic
+    prefix_list_ids = []  # No specific prefix list used
   }
 
   tags = {
-    Name = "${var.env_prefix}-sg"
+    Name = "${var.env_prefix}-sg"  # Tag with environment prefix for identification
   }
 }
 
+# Create an internet gateway for enabling internet access
 resource "aws_internet_gateway" "myapp-igw" {
-	vpc_id = aws_vpc.myapp-vpc.id
-    
-    tags = {
-     Name = "${var.env_prefix}-internet-gateway"
-   }
-}
-
-resource "aws_route_table" "myapp-route-table" {
-   vpc_id = aws_vpc.myapp-vpc.id
-
-   route {
-     cidr_block = "0.0.0.0/0"
-     gateway_id = aws_internet_gateway.myapp-igw.id
-   }
-
-   # default route, mapping VPC CIDR block to "local", created implicitly and cannot be specified.
-
-   tags = {
-     Name = "${var.env_prefix}-route-table"
-   }
- }
-
-# Associate subnet with Route Table
-resource "aws_route_table_association" "a-rtb-subnet" {
-  subnet_id      = aws_subnet.myapp-subnet-1.id
-  route_table_id = aws_route_table.myapp-route-table.id
-}
-
-resource "aws_key_pair" "ssh-key" {
-  key_name   = "myapp-key"
-  public_key = file(var.ssh_key)
-}
-
-output "server-ip" {
-    value = aws_instance.myapp-server.public_ip
-}
-
-resource "aws_instance" "myapp-server" {
-  ami                         = data.aws_ami.amazon-linux-image.id
-  instance_type               = var.instance_type
-  key_name                    = "myapp-key"
-  associate_public_ip_address = true
-  subnet_id                   = aws_subnet.myapp-subnet-1.id
-  vpc_security_group_ids      = [aws_security_group.myapp-sg.id]
-  availability_zone			      = var.avail_zone
+  vpc_id = aws_vpc.myapp-vpc.id  # Attach the gateway to the VPC
 
   tags = {
-    Name = "${var.env_prefix}-server"
+    Name = "${var.env_prefix}-internet-gateway"  # Tag with environment prefix for identification
+  }
+}
+
+# Create a custom route table for the VPC
+resource "aws_route_table" "myapp-route-table" {
+  vpc_id = aws_vpc.myapp-vpc.id  # Associate route table with the VPC
+
+  # Define a route for all outbound traffic to go through the internet gateway
+  route {
+    cidr_block = "0.0.0.0/0"  # Route all outbound traffic
+    gateway_id = aws_internet_gateway.myapp-igw.id  # Route through the internet gateway
   }
 
+  tags = {
+    Name = "${var.env_prefix}-route-table"  # Tag with environment prefix for identification
+  }
+}
+
+# Associate the subnet with the route table
+resource "aws_route_table_association" "a-rtb-subnet" {
+  subnet_id      = aws_subnet.myapp-subnet-1.id  # Associate subnet with the route table
+  route_table_id = aws_route_table.myapp-route-table.id  # Use the custom route table
+}
+
+# Define an SSH key pair resource for EC2 access
+resource "aws_key_pair" "ssh-key" {
+  key_name   = "myapp-key"  # Name of the SSH key pair
+  public_key = file(var.ssh_key)  # Use the public SSH key specified in terraform.tfvars
+}
+
+# Output the public IP address of the EC2 instance
+output "server-ip" {
+  value = aws_instance.myapp-server.public_ip  # Output the public IP of the first EC2 instance
+}
+
+# Provision the first EC2 instance
+resource "aws_instance" "myapp-server" {
+  ami                         = data.aws_ami.amazon-linux-image.id  # Use the selected Amazon Linux AMI
+  instance_type               = var.instance_type  # Define the instance type (e.g., t2.micro)
+  key_name                    = "myapp-key"  # Use the SSH key for access
+  associate_public_ip_address = true  # Ensure the instance gets a public IP address
+  subnet_id                   = aws_subnet.myapp-subnet-1.id  # Assign instance to the subnet
+  vpc_security_group_ids      = [aws_security_group.myapp-sg.id]  # Attach the security group
+  availability_zone           = var.avail_zone  # Define the availability zone for the instance
+
+  tags = {
+    Name = "${var.env_prefix}-server"  # Tag with environment prefix for identification
+  }
+
+  # User data script to install Docker and run an NGINX container
   user_data = <<EOF
                  #!/bin/bash
-                 apt-get update && apt-get install -y docker-ce
-                 systemctl start docker
-                 user
+                 apt-get update && apt-get install -y docker-ce  # Install Docker
+                 systemctl start docker  # Start Docker service
+                 usermod -aG docker ec2-user  # Add user to Docker group
+                 docker run -p 8080:8080 nginx  # Run NGINX container on port 8080
+              EOF
+}
+
+# Provision the second EC2 instance
+resource "aws_instance" "myapp-server-two" {
+  ami                         = data.aws_ami.amazon-linux-image.id  # Use the selected Amazon Linux AMI
+  instance_type               = var.instance_type  # Define the instance type
+  key_name                    = "myapp-key"  # Use the SSH key for access
+  associate_public_ip_address = true  # Ensure the instance gets a public IP address
+  subnet_id                   = aws_subnet.myapp-subnet-1.id  # Assign instance to the subnet
+  vpc_security_group_ids      = [aws_security_group.myapp-sg.id]  # Attach the security group
+  availability_zone           = var.avail_zone  # Define the availability zone for the instance
+
+  tags = {
+    Name = "${var.env_prefix}-server-two"  # Tag with environment prefix for identification
+  }
+
+  # User data script to install Docker and run an NGINX container
+  user_data = <<EOF
+                 #!/bin/bash
+                 apt-get update && apt-get install -y docker-ce  # Install Docker
+                 systemctl start docker  # Start Docker service
+                 usermod -aG docker ec2-user  # Add user to Docker group
+                 docker run -p 8080:8080 nginx  # Run NGINX container on port 8080
+              EOF
+}
+
 ```
 
 ### initialize
