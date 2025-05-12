@@ -93,6 +93,7 @@ public_key_location = "/home/machine/.ssh/id_rsa.pub"  # File path to your publi
 
 ### `main.tf`
 
+```hcl
 # Define the AWS provider and region for infrastructure provisioning
 provider "aws" {
   region = "eu-central-1"  # Specify AWS region (e.g., EU Central 1)
@@ -271,37 +272,66 @@ resource "aws_instance" "myapp-server-two" {
                  docker run -p 8080:8080 nginx  # Run NGINX container on port 8080
               EOF
 }
+```
+
+### Initialize
+
+```bash
+terraform init
+```
+
+### Preview Terraform Actions
+
+```bash
+terraform plan
+```
+
+### Apply Configuration with Variables
+
+```bash
+terraform apply -var-file terraform-dev.tfvars
+```
+
+### Destroy a Single Resource
+
+```bash
+terraform destroy -target aws_vpc.myapp-vpc
+```
+
+### Destroy Everything from tf Files
+
+```bash
+terraform destroy
+```
+
+### Show Resources and Components from Current State
+
+```bash
+terraform state list
+```
+
+### Show Current State of a Specific Resource/Data
+
+```bash
+terraform state show aws_vpc.myapp-vpc
+```
+
+### Set Availability Zone as Custom tf Environment Variable - Before Apply
+
+```bash
+export TF_VAR_avail_zone="eu-west-3a"
+```
+
+---
+
+## License
+
+This project
+
+
+is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ```
 
-### initialize
-
-    terraform init
-
-### preview terraform actions
-
-    terraform plan
-
-### apply configuration with variables
-
-    terraform apply -var-file terraform-dev.tfvars
-
-### destroy a single resource
-
-    terraform destroy -target aws_vpc.myapp-vpc
-
-### destroy everything fromtf files
-
-    terraform destroy
-
-### show resources and components from current state
-
-    terraform state list
-
-### show current state of a specific resource/data
-
-    terraform state show aws_vpc.myapp-vpc    
-
-### set avail_zone as custom tf environment variable - before apply
-
-    export TF_VAR_avail_zone="eu-west-3a"
+Feel free to customize the configuration further and adjust any values or specifics as needed.
+```
