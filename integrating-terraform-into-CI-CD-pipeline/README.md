@@ -102,59 +102,8 @@ Create a `terraform` folder in the project containing Terraform configuration fi
 ## Provision Stage in Jenkinsfile
 
 ```groovy
-stage('provision server') {
-    environment {
-        AWS_ACCESS_KEY_ID = credentials('jenkins_aws_access_key_id')
-        AWS_SECRET_ACCESS_KEY = credentials('jenkins_aws_secret_access_key')
-        TF_VAR_env_prefix = 'test'
-    }
-    steps {
-        script {
-            dir('terraform') {
-                sh "terraform init"
-                sh "terraform apply --auto-approve"
-                EC2_PUBLIC_IP = sh(
-                    script: "terraform output ec2_public_ip",
-                    returnStdout: true
-                ).trim()
-            }
-        }
-    }
-}
-```
-
-## Deploy Stage in Jenkinsfile
-
-```groovy
-stage('deploy') {
-    environment {
-        DOCKER_CREDS = credentials('docker-hub-repo')
-    }
-    steps {
-        script {
-            echo "waiting for EC2 server to initialize"
-            sleep(time: 90, unit: "SECONDS")
-
-            echo 'deploying docker image to EC2...'
-            echo "${EC2_PUBLIC_IP}"
-
-            def shellCmd = "bash ./server-cmds.sh ${IMAGE_NAME} ${DOCKER_CREDS_USR} ${DOCKER_CREDS_PSW}"
-            def ec2Instance = "ec2-user@${EC2_PUBLIC_IP}"
-
-            sshagent(['server-ssh-key']) {
-                sh "scp -o StrictHostKeyChecking=no server-cmds.sh ${ec2Instance}:/home/ec2-user"
-                sh "scp -o StrictHostKeyChecking=no docker-compose.yaml ${ec2Instance}:/home/ec2-user"
-                sh "ssh -o StrictHostKeyChecking=no ${ec2Instance} ${shellCmd}"
-            }
-        }
-    }
-}
-```
-
-## Jenkinsfile
-
-```groovy
 #!/usr/bin/env groovy
+# Specifies the interpreter for the script
 
 library identifier: 'jenkins-shared-library@master', retriever: modernSCM(
     [$class: 'GitSCMSource',
@@ -162,78 +111,125 @@ library identifier: 'jenkins-shared-library@master', retriever: modernSCM(
      credentialsId: 'gitlab-credentials'
     ]
 )
+# Defines the Jenkins shared library to be used
 
 pipeline {
+    # Defines the pipeline block
     agent any
+    # Executes the pipeline on any available Jenkins agent
     tools {
+        # Specifies required tools
         maven 'Maven'
+        # Requires a Maven installation named 'Maven' to be configured in Jenkins
     }
     environment {
+        # Defines environment variables for the pipeline
         IMAGE_NAME = 'awaisakram/demo-app:java-maven-2.0'
+        # Sets the Docker image name
     }
     stages {
+        # Defines the stages of the pipeline
         stage('build app') {
+            # Stage for building the application
             steps {
+                # Defines the steps within the 'build app' stage
                 script {
+                    # Executes a Groovy script block
                     echo 'building application jar...'
+                    # Prints a message to the console
                     buildJar()
+                    # Calls a function (presumably defined in the shared library) to build the JAR file
                 }
             }
         }
         stage('build image') {
+            # Stage for building the Docker image
             steps {
+                # Defines the steps within the 'build image' stage
                 script {
+                    # Executes a Groovy script block
                     echo 'building docker image...'
+                    # Prints a message to the console
                     buildImage(env.IMAGE_NAME)
+                    # Calls a function to build the Docker image using the defined IMAGE_NAME
                     dockerLogin()
+                    # Calls a function to log in to the Docker registry
                     dockerPush(env.IMAGE_NAME)
+                    # Calls a function to push the Docker image to the registry
                 }
             }
         }
         stage('provision server') {
+            # Stage for provisioning the infrastructure (EC2 server)
             environment {
+                # Defines environment variables specific to this stage
                 AWS_ACCESS_KEY_ID = credentials('jenkins_aws_access_key_id')
+                # Retrieves AWS access key from Jenkins credentials with the ID 'jenkins_aws_access_key_id'
                 AWS_SECRET_ACCESS_KEY = credentials('jenkins_aws_secret_access_key')
+                # Retrieves AWS secret access key from Jenkins credentials with the ID 'jenkins_aws_secret_access_key'
                 TF_VAR_env_prefix = 'test'
+                # Sets a Terraform variable 'env_prefix' to 'test'
             }
             steps {
+                # Defines the steps within the 'provision server' stage
                 script {
+                    # Executes a Groovy script block
                     dir('terraform') {
+                        # Changes the current directory to 'terraform'
                         sh "terraform init"
+                        # Executes the 'terraform init' command
                         sh "terraform apply --auto-approve"
+                        # Executes the 'terraform apply --auto-approve' command
                         EC2_PUBLIC_IP = sh(
                             script: "terraform output ec2_public_ip",
                             returnStdout: true
                         ).trim()
+                        # Executes 'terraform output ec2_public_ip', captures the output, and removes leading/trailing whitespace
                     }
                 }
             }
         }
         stage('deploy') {
+            # Stage for deploying the application to the provisioned server
             environment {
+                # Defines environment variables specific to this stage
                 DOCKER_CREDS = credentials('docker-hub-repo')
+                # Retrieves Docker Hub credentials from Jenkins with the ID 'docker-hub-repo'
             }
             steps {
+                # Defines the steps within the 'deploy' stage
                 script {
+                    # Executes a Groovy script block
                     echo "waiting for EC2 server to initialize"
+                    # Prints a message to the console
                     sleep(time: 90, unit: "SECONDS")
+                    # Pauses the pipeline execution for 90 seconds
 
                     echo 'deploying docker image to EC2...'
+                    # Prints a message to the console
                     echo "${EC2_PUBLIC_IP}"
+                    # Prints the dynamically obtained EC2 public IP
 
                     def shellCmd = "bash ./server-cmds.sh ${IMAGE_NAME} ${DOCKER_CREDS_USR} ${DOCKER_CREDS_PSW}"
+                    # Defines a shell command to be executed on the remote server, using environment variables
                     def ec2Instance = "ec2-user@${EC2_PUBLIC_IP}"
+                    # Defines the SSH connection string for the EC2 instance
 
                     sshagent(['server-ssh-key']) {
+                        # Executes commands within an SSH agent context using the credential with ID 'server-ssh-key'
                         sh "scp -o StrictHostKeyChecking=no server-cmds.sh ${ec2Instance}:/home/ec2-user"
+                        # Securely copies the 'server-cmds.sh' script to the remote EC2 instance
                         sh "scp -o StrictHostKeyChecking=no docker-compose.yaml ${ec2Instance}:/home/ec2-user"
+                        # Securely copies the 'docker-compose.yaml' file to the remote EC2 instance
                         sh "ssh -o StrictHostKeyChecking=no ${ec2Instance} ${shellCmd}"
+                        # Executes the defined shell command on the remote EC2 instance via SSH
                     }
                 }
             }
         }
     }
 }
+```
 ```
 
 ## License
