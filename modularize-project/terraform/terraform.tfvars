@@ -1,0 +1,8 @@
+env_prefix = "dev"
+avail_zone = "eu-central-1a"
+vpc_cidr_block = "10.0.0.0/16"
+subnet_cidr_block = "10.0.10.0/24"
+my_ip = "31.10.152.229/32"
+image_name = "amzn2-ami-kernel-5.10-hvm-*-x86_64-gp2"
+instance_type = "t2.micro"
+public_key_location = "/Users/fsiegrist/.ssh/id_ed25519.pub"
