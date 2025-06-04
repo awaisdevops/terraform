@@ -502,8 +502,8 @@ output "ssh_command" {
 
 1.  **Clone the Repository:**
     ```bash
-    git clone 
-    cd <repository_name>
+    git clone https://github.com/awaisdevops/terraform.git
+    cd IAM-EC2-EFS-S3-SGs
     ```
 
 2.  **Configure Variables:**
