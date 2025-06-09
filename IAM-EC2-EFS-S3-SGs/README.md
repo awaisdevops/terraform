@@ -1,4 +1,4 @@
-# AWS EC2 Instance with Dedicated VPC, IAM Role, EFS, and S3 Storage (Terraform)
+# Automated AWS Infrastructure Deployment with Terraform (EC2, VPC, IAM, EFS, S3)
 
 This Terraform project automates the deployment of an AWS EC2 instance within a dedicated VPC. It sets up an IAM role for the instance, enabling it to interact with S3 and EFS. The project also creates and attaches both EFS (Elastic File System) and S3 (Simple Storage Service) storage to the EC2 instance, with appropriate security group configurations.
 
